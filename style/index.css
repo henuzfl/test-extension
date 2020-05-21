@@ -1,0 +1,20 @@
+
+
+[data-jp-theme-light="true"] .jp-test-icon {
+    background-image: url(icon-light.svg);
+}
+  
+[data-jp-theme-light="false"] .jp-test-icon {
+    background-image: url(icon-dark.svg);
+}
+
+.jp-test-icon {
+    background-size: 90%;
+}
+
+/*
+隐藏掉新增文件的按钮
+*/
+#test-filebrowser > div.jp-Toolbar > div:nth-child(1) {
+  display: none;
+}
