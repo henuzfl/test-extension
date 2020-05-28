@@ -38,11 +38,9 @@ export class TestDrive implements Contents.IDrive {
     return result;
   }
 
-  getPathIdByLocalPath(localPath: string): Promise<Number> {
+  async getInfoByLocalPath(localPath: string) {
     if (localPath == '') {
-      return new Promise<Number>((resolve, reject) => {
-        resolve(0);
-      });
+      return 0;
     }
     localPath = this.formatLocalPath(localPath);
     var myHeaders = new Headers();
@@ -62,10 +60,7 @@ export class TestDrive implements Contents.IDrive {
       })
       .then(response => {
         if (response && response.code == 200) {
-          const resData = response.data;
-          return new Promise<Number>((resolve, reject) => {
-            resolve(resData.id);
-          });
+          return response.data;
         } else {
           return Promise.reject(response);
         }
@@ -79,122 +74,216 @@ export class TestDrive implements Contents.IDrive {
     return localPath;
   }
 
-  get(
+  async get(
     localPath: string,
     options?: Contents.IFetchOptions
   ): Promise<Contents.IModel> {
-    return this.getPathIdByLocalPath(localPath).then(pathId => {
-      const pathUrl = this._backEndBaseUrl + 'doc/' + pathId + '/tree';
-      return fetch(pathUrl, {
-        method: 'GET',
-        redirect: 'follow'
-      })
-        .then((response: Response) => {
-          if (response.status != 200) {
-            return response.json().then(json => Promise.reject(json));
-          }
-          return response.json();
-        })
-        .then(response => {
-          if (response && response.code == 200) {
-            /**
-             * 判断是目录，则显示目录
-             */
-            const resData = response.data;
+    let pathId = 0;
+    if (localPath != '') {
+      const pathInfo = await this.getInfoByLocalPath(localPath);
+      pathId = pathInfo.id;
+    }
 
-            return new Promise<Contents.IModel>((resolve, reject) => {
-              if (resData.isFolder) {
-                let content: any[] = new Array<any>();
-                let children = resData.children;
-                if (resData.children) {
-                  content = children;
-                }
-                if (Array.isArray(children)) {
-                  content = children.map(c => this.toJupyterContents(c));
-                }
-                if (localPath.startsWith('/')) {
-                  localPath = localPath.substring(1, localPath.length);
-                }
-                resolve({
-                  type: 'directory',
-                  path: localPath.trim(),
-                  name: '',
-                  format: 'json',
-                  content: content,
-                  created: '',
-                  writable: false,
-                  last_modified: '',
-                  mimetype: ''
-                });
-              } else {
-                resolve({
-                  type: 'file',
-                  path: localPath,
-                  name: '',
-                  format: 'text',
-                  content: 'aa,aa\nbb,bb',
-                  created: '',
-                  writable: false,
-                  last_modified: '',
-                  mimetype: ''
-                });
+    const pathUrl = this._backEndBaseUrl + 'doc/' + pathId + '/tree';
+
+    return fetch(pathUrl, {
+      method: 'GET',
+      redirect: 'follow'
+    })
+      .then((response: Response) => {
+        if (response.status != 200) {
+          return response.json().then(json => Promise.reject(json));
+        }
+        return response.json();
+      })
+      .then(response => {
+        if (response && response.code == 200) {
+          const resData = response.data;
+          return new Promise<Contents.IModel>((resolve, reject) => {
+            if (resData.isFolder) {
+              let content: any[] = new Array<any>();
+              let children = resData.children;
+              if (resData.children) {
+                content = children;
               }
-            });
-          }
-        });
-    });
+              if (Array.isArray(children)) {
+                content = children.map(c => this.toJupyterContents(c));
+              }
+              if (localPath.startsWith('/')) {
+                localPath = localPath.substring(1, localPath.length);
+              }
+              resolve({
+                type: 'directory',
+                path: localPath.trim(),
+                name: '',
+                format: 'json',
+                content: content,
+                created: '',
+                writable: false,
+                last_modified: '',
+                mimetype: ''
+              });
+            } else {
+              resolve({
+                type: 'file',
+                path: localPath,
+                name: '',
+                format: 'text',
+                content: 'aa,aa\nbb,bb',
+                created: '',
+                writable: false,
+                last_modified: '',
+                mimetype: ''
+              });
+            }
+          });
+        }
+      });
   }
+
   getDownloadUrl(localPath: string): Promise<string> {
     throw new Error('Method not implemented.');
   }
-  newUntitled(options?: Contents.ICreateOptions): Promise<Contents.IModel> {
-    console.log(options);
-    this.getPathIdByLocalPath(options.path).then(pathId => {
-      /**
-       * 调用添加文件夹的接口
-       */
-      var myHeaders = new Headers();
-      myHeaders.append('Content-Type', 'application/json');
-      var raw = JSON.stringify({
-        folderId: pathId,
-        isFolder: true,
-      });
-      return fetch(this._backEndBaseUrl + 'doc/add', {
-        method: 'POST',
-        headers: myHeaders,
-        body: raw,
-        redirect: 'follow'
-      })
-        .then((response: Response) => {
-          if (response.status != 200) {
-            return response.json().then(json => Promise.reject(json));
-          }
-          return response.json();
-        })
-        .then(response => {
-          if (response && response.code == 200) {
-
-            const resData = response.data;
-            this._fileChanged.emit({
-              type: 'new',
-              oldValue: null,
-              newValue: resData
-            });
-            return this.toJupyterContents(resData);
-          } else {
-            return Promise.reject(response);
-          }
-        });
-
-      
+  async newUntitled(
+    options?: Contents.ICreateOptions
+  ): Promise<Contents.IModel> {
+    const pathInfo = await this.getInfoByLocalPath(options.path);
+    const pathId = pathInfo.id;
+    var myHeaders = new Headers();
+    myHeaders.append('Content-Type', 'application/json');
+    var raw = JSON.stringify({
+      folderId: pathId,
+      isFolder: true
     });
-    return Promise.reject('Not yet');
+    return fetch(this._backEndBaseUrl + 'doc/add', {
+      method: 'POST',
+      headers: myHeaders,
+      body: raw,
+      redirect: 'follow'
+    })
+      .then((response: Response) => {
+        if (response.status != 200) {
+          return response.json().then(json => Promise.reject(json));
+        }
+        return response.json();
+      })
+      .then(response => {
+        if (response && response.code == 200) {
+          const resData = this.toJupyterContents(response.data);
+          this._fileChanged.emit({
+            type: 'new',
+            oldValue: null,
+            newValue: resData
+          });
+          return resData;
+        } else {
+          return Promise.reject(response);
+        }
+      });
   }
-  delete(localPath: string): Promise<void> {
-    throw new Error('Method not implemented.');
+
+  async delete(localPath: string): Promise<void> {
+    const localPathInfo = await this.getInfoByLocalPath(localPath);
+    // if (localPathInfo.isFolder && null != localPathInfo.children) {
+    //   const message = `确定删除: ` + localPathInfo.name + '吗？';
+    //   const result = await showDialog({
+    //     title: '删除',
+    //     body: message,
+    //     buttons: [Dialog.cancelButton(), Dialog.warnButton({ label: 'Delete' })]
+    //   });
+    //   if (this.isDisposed || !result.button.accept) {
+    //     return;
+    //   }
+    // }
+    return fetch(this._backEndBaseUrl +  'doc/delete/' + localPathInfo.id, {
+      method: 'DELETE',
+      redirect: 'follow'
+    })
+      .then((response: Response) => {
+        if (response.status != 200) {
+          return response.json().then(json => Promise.reject(json));
+        }
+        return response.json();
+      })
+      .then(response => {
+        if (response && response.code == 200) {
+          this._fileChanged.emit({
+            type: 'delete',
+            oldValue: { path: localPath },
+            newValue: null
+          });
+        } else {
+          return Promise.reject(response);
+        }
+      })
+      .catch(error => console.log('error', error));
   }
-  rename(oldLocalPath: string, newLocalPath: string): Promise<Contents.IModel> {
-    throw new Error('Method not implemented.');
+
+  getFileNameByPath(path: string): string {
+    if ('' == path) {
+      return '';
+    }
+    if(path.indexOf("/") == -1){
+      return path;
+    }
+    return path.split('/').pop();
+  }
+
+  getParentPathByPath(path: string): string {
+    if ('' == path) {
+      return '';
+    }
+    if (path.endsWith('/')) {
+      path = path.substring(0, path.length - 1);
+    }
+    return path.substring(0, path.lastIndexOf('/'));
+  }
+
+  async rename(
+    oldLocalPath: string,
+    newLocalPath: string
+  ): Promise<Contents.IModel> {
+    oldLocalPath = oldLocalPath.trim();
+    newLocalPath = newLocalPath.trim();
+    const oldPathInfo = await this.getInfoByLocalPath(oldLocalPath);
+    const oldPathId = oldPathInfo.id;
+    const newFileName = this.getFileNameByPath(newLocalPath);
+    const newParentPath = this.getParentPathByPath(newLocalPath);
+    const oldParentPath = this.getParentPathByPath(oldLocalPath);
+    var raw: { [key: string]: string; } = {};
+    raw['filename'] = newFileName;
+    raw['id'] = oldPathId;
+    if (newParentPath != oldParentPath) {
+      const newParentPathInfo = await this.getInfoByLocalPath(newParentPath);
+      raw['folderId'] = newParentPathInfo.id;
+    }
+    var myHeaders = new Headers();
+    myHeaders.append('Content-Type', 'application/json');
+    return fetch(this._backEndBaseUrl + 'doc/update', {
+      method: 'POST',
+      headers: myHeaders,
+      body: JSON.stringify(raw),
+      redirect: 'follow'
+    })
+      .then((response: Response) => {
+        if (response.status != 200) {
+          return response.json().then(json => Promise.reject(json));
+        }
+        return response.json();
+      })
+      .then(response => {
+        if (response && response.code == 200) {
+          const resData = this.toJupyterContents(response.data);
+          this._fileChanged.emit({
+            type: 'rename',
+            oldValue: { path: oldLocalPath },
+            newValue: resData
+          });
+          return resData;
+        } else {
+          return Promise.reject(response);
+        }
+      });
   }
   save(
     localPath: string,

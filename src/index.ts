@@ -66,7 +66,7 @@ function activeTestFileBrower(
   widget.title.iconClass = "jp-test-icon jp-SideBar-tabIcon";
   widget.title.caption = "Test file Browser";
   widget.id = "test-file-browser";
-
+  
   app.shell.add(widget, "left", { rank: 100 });
   return;
 }

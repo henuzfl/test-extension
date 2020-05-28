@@ -1,5 +1,7 @@
 
-
+/*
+图标，当选择light 或 dark模式，选择不同的icon
+*/
 [data-jp-theme-light="true"] .jp-test-icon {
     background-image: url(icon-light.svg);
 }
