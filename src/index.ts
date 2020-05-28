@@ -28,9 +28,9 @@ const extension: JupyterFrontEndPlugin<void> = {
 };
 
 export class TestFileBrowerWidget extends Widget{
-  constructor(browser: FileBrowser) {
+  constructor(browser: FileBrowser,manager: IDocumentManager) {
     super();
-    this.addClass("jp-AncunBrowser");
+    this.addClass("jp-TestBrowser");
     this.layout = new PanelLayout();
     (this.layout as PanelLayout).addWidget(browser);
     browser.model.refresh();
@@ -44,17 +44,26 @@ function activeTestFileBrower(
   manager: IDocumentManager,
   factory: IFileBrowserFactory,
 ): void{
+  /**
+   * 自定义的文件浏览器驱动，并添加到document manager
+   */
   const drive = new TestDrive(app.docRegistry);
   manager.services.contents.addDrive(drive);
 
+  /**
+   * 使用IFileBrowserFactory新建文件浏览器，并使用自定义的drive
+   */
   const browser = factory.createFileBrowser(NAMESPACE, {
     driveName: drive.name,
     state: null,
     refreshInterval: 300000
   });
 
-  const widget = new TestFileBrowerWidget(browser);
-  widget.title.iconClass = "jp-icon3 jp-SideBar-tabIcon";
+  /**
+   * 自定义的widget，并添加到app
+   */
+  const widget = new TestFileBrowerWidget(browser,manager);
+  widget.title.iconClass = "jp-test-icon jp-SideBar-tabIcon";
   widget.title.caption = "Test file Browser";
   widget.id = "test-file-browser";
 
