@@ -7,12 +7,10 @@ export class TestDrive implements Contents.IDrive {
   constructor(registry: DocumentRegistry) {
     this._registry = registry;
     this._backEndBaseUrl = 'http://192.168.2.55:1325/';
-    this._httpUtils = new HttpUtils();
   }
 
   public _registry: DocumentRegistry;
   private _backEndBaseUrl: string;
-  _httpUtils : HttpUtils;
 
   name: string = 'test-file-drive';
   serverSettings: ServerConnection.ISettings;
@@ -46,28 +44,9 @@ export class TestDrive implements Contents.IDrive {
       return 0;
     }
     localPath = this.formatLocalPath(localPath);
-    var myHeaders = new Headers();
-    myHeaders.append('Content-Type', 'application/json');
-    var raw = JSON.stringify({ path: localPath });
-    return fetch(this._backEndBaseUrl + 'doc/path/info', {
-      method: 'POST',
-      headers: myHeaders,
-      body: raw,
-      redirect: 'follow'
-    })
-      .then((response: Response) => {
-        if (response.status != 200) {
-          return response.json().then(json => Promise.reject(json));
-        }
-        return response.json();
-      })
-      .then(response => {
-        if (response && response.code == 200) {
-          return response.data;
-        } else {
-          return Promise.reject(response);
-        }
-      });
+    return HttpUtils.post(this._backEndBaseUrl + 'doc/path/info', {
+      path: localPath
+    });
   }
 
   formatLocalPath(localPath: string): string {
@@ -89,7 +68,7 @@ export class TestDrive implements Contents.IDrive {
 
     const pathUrl = this._backEndBaseUrl + 'doc/' + pathId + '/tree';
 
-    const resData = await this._httpUtils.get(pathUrl);
+    const resData = await HttpUtils.get(pathUrl);
 
     return new Promise<Contents.IModel>((resolve, reject) => {
       if (resData.isFolder) {
@@ -116,8 +95,6 @@ export class TestDrive implements Contents.IDrive {
           mimetype: ''
         });
       } else {
-
-
         resolve({
           type: 'file',
           path: localPath,
@@ -143,35 +120,18 @@ export class TestDrive implements Contents.IDrive {
     const pathId = pathInfo.id;
     var myHeaders = new Headers();
     myHeaders.append('Content-Type', 'application/json');
-    var raw = JSON.stringify({
+    const resData = await HttpUtils.post(this._backEndBaseUrl + 'doc/add', {
       folderId: pathId,
       isFolder: true
     });
-    return fetch(this._backEndBaseUrl + 'doc/add', {
-      method: 'POST',
-      headers: myHeaders,
-      body: raw,
-      redirect: 'follow'
-    })
-      .then((response: Response) => {
-        if (response.status != 200) {
-          return response.json().then(json => Promise.reject(json));
-        }
-        return response.json();
-      })
-      .then(response => {
-        if (response && response.code == 200) {
-          const resData = this.toJupyterContents(response.data);
-          this._fileChanged.emit({
-            type: 'new',
-            oldValue: null,
-            newValue: resData
-          });
-          return resData;
-        } else {
-          return Promise.reject(response);
-        }
-      });
+
+    const newModel = this.toJupyterContents(resData);
+    this._fileChanged.emit({
+      type: 'new',
+      oldValue: null,
+      newValue: newModel
+    });
+    return newModel;
   }
 
   async delete(localPath: string): Promise<void> {
@@ -187,35 +147,19 @@ export class TestDrive implements Contents.IDrive {
     //     return;
     //   }
     // }
-    return fetch(this._backEndBaseUrl +  'doc/delete/' + localPathInfo.id, {
-      method: 'DELETE',
-      redirect: 'follow'
-    })
-      .then((response: Response) => {
-        if (response.status != 200) {
-          return response.json().then(json => Promise.reject(json));
-        }
-        return response.json();
-      })
-      .then(response => {
-        if (response && response.code == 200) {
-          this._fileChanged.emit({
-            type: 'delete',
-            oldValue: { path: localPath },
-            newValue: null
-          });
-        } else {
-          return Promise.reject(response);
-        }
-      })
-      .catch(error => console.log('error', error));
+    await HttpUtils.delete(this._backEndBaseUrl + 'doc/delete/' + localPathInfo.id);
+    this._fileChanged.emit({
+      type: 'delete',
+      oldValue: { path: localPath },
+      newValue: null
+    });
   }
 
   getFileNameByPath(path: string): string {
     if ('' == path) {
       return '';
     }
-    if(path.indexOf("/") == -1){
+    if (path.indexOf('/') == -1) {
       return path;
     }
     return path.split('/').pop();
@@ -242,7 +186,7 @@ export class TestDrive implements Contents.IDrive {
     const newFileName = this.getFileNameByPath(newLocalPath);
     const newParentPath = this.getParentPathByPath(newLocalPath);
     const oldParentPath = this.getParentPathByPath(oldLocalPath);
-    var raw: { [key: string]: string; } = {};
+    var raw: { [key: string]: string } = {};
     raw['filename'] = newFileName;
     raw['id'] = oldPathId;
     if (newParentPath != oldParentPath) {
@@ -251,31 +195,15 @@ export class TestDrive implements Contents.IDrive {
     }
     var myHeaders = new Headers();
     myHeaders.append('Content-Type', 'application/json');
-    return fetch(this._backEndBaseUrl + 'doc/update', {
-      method: 'POST',
-      headers: myHeaders,
-      body: JSON.stringify(raw),
-      redirect: 'follow'
-    })
-      .then((response: Response) => {
-        if (response.status != 200) {
-          return response.json().then(json => Promise.reject(json));
-        }
-        return response.json();
-      })
-      .then(response => {
-        if (response && response.code == 200) {
-          const resData = this.toJupyterContents(response.data);
-          this._fileChanged.emit({
-            type: 'rename',
-            oldValue: { path: oldLocalPath },
-            newValue: resData
-          });
-          return resData;
-        } else {
-          return Promise.reject(response);
-        }
-      });
+
+    const resData =  await HttpUtils.post(this._backEndBaseUrl + 'doc/update',raw);
+    const newModel = this.toJupyterContents(resData);
+    this._fileChanged.emit({
+      type: 'rename',
+      oldValue: { path: oldLocalPath },
+      newValue: newModel
+    });
+    return newModel;
   }
   save(
     localPath: string,
