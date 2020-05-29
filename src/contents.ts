@@ -1,15 +1,18 @@
 import { DocumentRegistry } from '@jupyterlab/docregistry';
 import { Contents, ServerConnection } from '@jupyterlab/services';
 import { Signal, ISignal } from '@lumino/signaling';
+import { HttpUtils } from './utils';
 
 export class TestDrive implements Contents.IDrive {
   constructor(registry: DocumentRegistry) {
     this._registry = registry;
     this._backEndBaseUrl = 'http://192.168.2.55:1325/';
+    this._httpUtils = new HttpUtils();
   }
 
   public _registry: DocumentRegistry;
   private _backEndBaseUrl: string;
+  _httpUtils : HttpUtils;
 
   name: string = 'test-file-drive';
   serverSettings: ServerConnection.ISettings;
@@ -86,59 +89,48 @@ export class TestDrive implements Contents.IDrive {
 
     const pathUrl = this._backEndBaseUrl + 'doc/' + pathId + '/tree';
 
-    return fetch(pathUrl, {
-      method: 'GET',
-      redirect: 'follow'
-    })
-      .then((response: Response) => {
-        if (response.status != 200) {
-          return response.json().then(json => Promise.reject(json));
+    const resData = await this._httpUtils.get(pathUrl);
+
+    return new Promise<Contents.IModel>((resolve, reject) => {
+      if (resData.isFolder) {
+        let content: any[] = new Array<any>();
+        let children = resData.children;
+        if (resData.children) {
+          content = children;
         }
-        return response.json();
-      })
-      .then(response => {
-        if (response && response.code == 200) {
-          const resData = response.data;
-          return new Promise<Contents.IModel>((resolve, reject) => {
-            if (resData.isFolder) {
-              let content: any[] = new Array<any>();
-              let children = resData.children;
-              if (resData.children) {
-                content = children;
-              }
-              if (Array.isArray(children)) {
-                content = children.map(c => this.toJupyterContents(c));
-              }
-              if (localPath.startsWith('/')) {
-                localPath = localPath.substring(1, localPath.length);
-              }
-              resolve({
-                type: 'directory',
-                path: localPath.trim(),
-                name: '',
-                format: 'json',
-                content: content,
-                created: '',
-                writable: false,
-                last_modified: '',
-                mimetype: ''
-              });
-            } else {
-              resolve({
-                type: 'file',
-                path: localPath,
-                name: '',
-                format: 'text',
-                content: 'aa,aa\nbb,bb',
-                created: '',
-                writable: false,
-                last_modified: '',
-                mimetype: ''
-              });
-            }
-          });
+        if (Array.isArray(children)) {
+          content = children.map(c => this.toJupyterContents(c));
         }
-      });
+        if (localPath.startsWith('/')) {
+          localPath = localPath.substring(1, localPath.length);
+        }
+        resolve({
+          type: 'directory',
+          path: localPath.trim(),
+          name: '',
+          format: 'json',
+          content: content,
+          created: '',
+          writable: false,
+          last_modified: '',
+          mimetype: ''
+        });
+      } else {
+
+
+        resolve({
+          type: 'file',
+          path: localPath,
+          name: '',
+          format: 'text',
+          content: 'aa,aa\nbb,bb',
+          created: '',
+          writable: false,
+          last_modified: '',
+          mimetype: ''
+        });
+      }
+    });
   }
 
   getDownloadUrl(localPath: string): Promise<string> {
