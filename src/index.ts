@@ -3,8 +3,7 @@ import {
   JupyterFrontEndPlugin
 } from '@jupyterlab/application';
 
-import { PanelLayout, Widget } from "@lumino/widgets";
-
+import {Widget,GridLayout} from "@lumino/widgets";
 import { IDocumentManager } from "@jupyterlab/docmanager";
 
 import {
@@ -12,6 +11,11 @@ import {
   FileBrowser
 } from '@jupyterlab/filebrowser';
 import { TestDrive } from './contents';
+import { SetupCommands } from './commands';
+
+import {
+  ICommandPalette
+} from '@jupyterlab/apputils';
 
 
 /**
@@ -22,7 +26,8 @@ const extension: JupyterFrontEndPlugin<void> = {
   autoStart: true,
   requires: [
     IDocumentManager,
-    IFileBrowserFactory
+    IFileBrowserFactory,
+    ICommandPalette
   ],
   activate: activeTestFileBrower
 };
@@ -31,8 +36,11 @@ export class TestFileBrowerWidget extends Widget{
   constructor(browser: FileBrowser,manager: IDocumentManager) {
     super();
     this.addClass("jp-TestBrowser");
-    this.layout = new PanelLayout();
-    (this.layout as PanelLayout).addWidget(browser);
+    const layout  = (this.layout = new GridLayout({
+      rowCount: 1,
+      columnCount: 1
+    }));
+    layout.addWidget(browser);
     browser.model.refresh();
   }
 }
@@ -43,6 +51,7 @@ function activeTestFileBrower(
   app: JupyterFrontEnd,
   manager: IDocumentManager,
   factory: IFileBrowserFactory,
+  palette: ICommandPalette
 ): void{
   /**
    * 自定义的文件浏览器驱动，并添加到document manager
@@ -66,7 +75,7 @@ function activeTestFileBrower(
   widget.title.iconClass = "jp-test-icon jp-SideBar-tabIcon";
   widget.title.caption = "Test file Browser";
   widget.id = "test-file-browser";
-
+  SetupCommands(app,palette);
   app.shell.add(widget, "left", { rank: 100 });
   return;
 }
