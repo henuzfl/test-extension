@@ -46,7 +46,34 @@ export class HttpUtils {
         } else {
           return Promise.reject(response);
         }
-      });
+      })
+  }
+
+  public static async put(
+    url: string,
+    params: { [key: string]: any }
+  ): Promise<any> {
+    var myHeaders = new Headers();
+    myHeaders.append('Content-Type', 'application/json');
+    return fetch(url, {
+      method: 'PUT',
+      headers: myHeaders,
+      body: JSON.stringify(params),
+      redirect: 'follow'
+    })
+      .then((response: Response) => {
+        if (response.status != 200) {
+          return response.json().then(json => Promise.reject(json));
+        }
+        return response.json();
+      })
+      .then(response => {
+        if (response && response.code == 200) {
+          return response.data;
+        } else {
+          return Promise.reject(response);
+        }
+      })
   }
 
   public static async delete(url : string) : Promise<void>{

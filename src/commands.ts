@@ -6,7 +6,8 @@ import {
   } from '@jupyterlab/apputils';
 
 const cmdIds = {
-  startSearch: 'documentsearch:start-search'
+  startSearch: 'ancunFilebrowser:start-search',
+  showFileMetadata: "ancunFilebrowser:show-file-metadata",
 };
 
 export const SetupCommands = (
@@ -18,6 +19,13 @@ export const SetupCommands = (
     label: 'Find...',
     execute: () => {
         console.log("aaaaaaaaaaaaaaaaaaaaaaaa")
+    }
+  });
+
+  app.commands.addCommand(cmdIds.showFileMetadata,{
+    label: "show metadata...",
+    execute: ()=>{
+      console.log("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
     }
   });
 
@@ -39,5 +47,11 @@ export const SetupCommands = (
     command: cmdIds.startSearch,
     selector: '.jp-Notebook',
     rank: 1
+  });
+
+  app.contextMenu.addItem({
+    command: cmdIds.showFileMetadata,
+    selector: '.jp-Notebook',
+    rank: 2
   });
 };

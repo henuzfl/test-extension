@@ -13,6 +13,7 @@ export class TestDrive implements Contents.IDrive {
   private _backEndBaseUrl: string;
 
   name: string = 'test-file-drive';
+  readonly CSV_FILE_PREVIEW_LIMIT = 1000;
   serverSettings: ServerConnection.ISettings;
   private _fileChanged = new Signal<this, Contents.IChangedArgs>(this);
 
@@ -40,9 +41,6 @@ export class TestDrive implements Contents.IDrive {
   }
 
   async getInfoByLocalPath(localPath: string) {
-    if (localPath == '') {
-      return 0;
-    }
     localPath = this.formatLocalPath(localPath);
     return HttpUtils.post(this._backEndBaseUrl + 'doc/path/info', {
       path: localPath
@@ -60,58 +58,52 @@ export class TestDrive implements Contents.IDrive {
     localPath: string,
     options?: Contents.IFetchOptions
   ): Promise<Contents.IModel> {
-    let pathId = 0;
-    if (localPath != '') {
-      const pathInfo = await this.getInfoByLocalPath(localPath);
-      pathId = pathInfo.id;
-    }
-
-    const pathUrl = this._backEndBaseUrl + 'doc/' + pathId + '/tree';
-
-    const resData = await HttpUtils.get(pathUrl);
-
-    return new Promise<Contents.IModel>((resolve, reject) => {
-      if (resData.isFolder) {
-        let content: any[] = new Array<any>();
-        let children = resData.children;
-        if (resData.children) {
-          content = children;
-        }
-        if (Array.isArray(children)) {
-          content = children.map(c => this.toJupyterContents(c));
-        }
-        if (localPath.startsWith('/')) {
-          localPath = localPath.substring(1, localPath.length);
-        }
-        resolve({
-          type: 'directory',
-          path: localPath.trim(),
-          name: '',
-          format: 'json',
-          content: content,
-          created: '',
-          writable: false,
-          last_modified: '',
-          mimetype: ''
-        });
-      } else {
-        resolve({
-          type: 'file',
-          path: localPath,
-          name: '',
-          format: 'text',
-          content: 'aa,aa\nbb,bb',
-          created: '',
-          writable: false,
-          last_modified: '',
-          mimetype: ''
-        });
+    const pathInfo = await this.getInfoByLocalPath(localPath);
+    if (pathInfo.isFolder) {
+      const pathUrl = this._backEndBaseUrl + 'doc/' + pathInfo.id + '/tree';
+      const resData = await HttpUtils.get(pathUrl);
+      let content: any[] = new Array<any>();
+      let children = resData.children;
+      if (resData.children && Array.isArray(children)) {
+        content = content = children.map(c => this.toJupyterContents(c));
       }
-    });
+      if (localPath.startsWith('/')) {
+        localPath = localPath.substring(1, localPath.length);
+      }
+      return {
+        type: 'directory',
+        path: localPath.trim(),
+        name: '',
+        format: 'json',
+        content: content,
+        created: pathInfo.createTime,
+        writable: false,
+        last_modified: pathInfo.updateTime,
+        mimetype: ''
+      } as Contents.IModel;
+    }else{
+      const resData = await HttpUtils.get(this._backEndBaseUrl + "file/preview/" + pathInfo.id + "?limit="+this.CSV_FILE_PREVIEW_LIMIT);
+
+      return ({
+        type: 'file',
+        path: localPath,
+        name: '',
+        format: 'text',
+        content: resData,
+        created: pathInfo.createTime,
+        writable: false,
+        last_modified: pathInfo.updateTime,
+        mimetype: ''
+      }) as Contents.IModel;
+    }
   }
 
-  getDownloadUrl(localPath: string): Promise<string> {
-    throw new Error('Method not implemented.');
+  async getDownloadUrl(localPath: string): Promise<string> {
+    const resData = await this.getInfoByLocalPath(localPath);
+    if(resData.isFolder){
+      return Promise.reject("文件夹没有下载url");
+    }
+    return resData.url;
   }
   async newUntitled(
     options?: Contents.ICreateOptions
@@ -136,18 +128,9 @@ export class TestDrive implements Contents.IDrive {
 
   async delete(localPath: string): Promise<void> {
     const localPathInfo = await this.getInfoByLocalPath(localPath);
-    // if (localPathInfo.isFolder && null != localPathInfo.children) {
-    //   const message = `确定删除: ` + localPathInfo.name + '吗？';
-    //   const result = await showDialog({
-    //     title: '删除',
-    //     body: message,
-    //     buttons: [Dialog.cancelButton(), Dialog.warnButton({ label: 'Delete' })]
-    //   });
-    //   if (this.isDisposed || !result.button.accept) {
-    //     return;
-    //   }
-    // }
-    await HttpUtils.delete(this._backEndBaseUrl + 'doc/delete/' + localPathInfo.id);
+    await HttpUtils.delete(
+      this._backEndBaseUrl + 'doc/delete/' + localPathInfo.id
+    );
     this._fileChanged.emit({
       type: 'delete',
       oldValue: { path: localPath },
@@ -196,7 +179,10 @@ export class TestDrive implements Contents.IDrive {
     var myHeaders = new Headers();
     myHeaders.append('Content-Type', 'application/json');
 
-    const resData =  await HttpUtils.post(this._backEndBaseUrl + 'doc/update',raw);
+    const resData = await HttpUtils.post(
+      this._backEndBaseUrl + 'doc/update',
+      raw
+    );
     const newModel = this.toJupyterContents(resData);
     this._fileChanged.emit({
       type: 'rename',
@@ -205,11 +191,27 @@ export class TestDrive implements Contents.IDrive {
     });
     return newModel;
   }
-  save(
+  async save(
     localPath: string,
     options?: Partial<Contents.IModel>
   ): Promise<Contents.IModel> {
-    throw new Error('Method not implemented.');
+    const resData = await HttpUtils.put(
+      this._backEndBaseUrl + 'file/slice',
+      options
+    );
+    const newModel = this.toJupyterContents(resData);
+    if (
+      options.chunk == 1 ||
+      options.chunk == undefined ||
+      options.chunk == -1
+    ) {
+      this._fileChanged.emit({
+        type: 'save',
+        oldValue: null,
+        newValue: newModel
+      });
+    }
+    return newModel;
   }
   copy(localPath: string, toLocalDir: string): Promise<Contents.IModel> {
     throw new Error('Method not implemented.');

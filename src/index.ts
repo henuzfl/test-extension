@@ -2,13 +2,9 @@ import {
   JupyterFrontEnd,
   JupyterFrontEndPlugin
 } from '@jupyterlab/application';
-
-import {Widget,GridLayout} from "@lumino/widgets";
 import { IDocumentManager } from "@jupyterlab/docmanager";
-
 import {
   IFileBrowserFactory,
-  FileBrowser
 } from '@jupyterlab/filebrowser';
 import { TestDrive } from './contents';
 import { SetupCommands } from './commands';
@@ -16,6 +12,7 @@ import { SetupCommands } from './commands';
 import {
   ICommandPalette
 } from '@jupyterlab/apputils';
+import { AncunFileBrowser } from './dislogs';
 
 
 /**
@@ -31,19 +28,6 @@ const extension: JupyterFrontEndPlugin<void> = {
   ],
   activate: activeTestFileBrower
 };
-
-export class TestFileBrowerWidget extends Widget{
-  constructor(browser: FileBrowser,manager: IDocumentManager) {
-    super();
-    this.addClass("jp-TestBrowser");
-    const layout  = (this.layout = new GridLayout({
-      rowCount: 1,
-      columnCount: 1
-    }));
-    layout.addWidget(browser);
-    browser.model.refresh();
-  }
-}
 
 const NAMESPACE = "test-filebrowser";
 
@@ -71,7 +55,7 @@ function activeTestFileBrower(
   /**
    * 自定义的widget，并添加到app
    */
-  const widget = new TestFileBrowerWidget(browser,manager);
+  const widget = new AncunFileBrowser(browser,manager);
   widget.title.iconClass = "jp-test-icon jp-SideBar-tabIcon";
   widget.title.caption = "Test file Browser";
   widget.id = "test-file-browser";
